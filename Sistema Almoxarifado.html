@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1e3a5f">
+<title>Almoxarifado SARTOMAQ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,Arial,sans-serif;background:#eef2f6;color:#222}
+header{background:#1e3a5f;color:#fff;padding:12px;position:sticky;top:0;z-index:10}
+header h1{font-size:18px;margin-bottom:8px}
+.bar{display:flex;gap:6px;flex-wrap:wrap}
+input,select,textarea{padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;width:100%}
+#busca{flex:1;min-width:150px}
+button{border:none;border-radius:8px;padding:10px 12px;font-size:14px;cursor:pointer;background:#2d6cdf;color:#fff}
+button.sec{background:#5a6b7d}button.ok{background:#1e9e5a}button.del{background:#d33}
+.info{padding:8px 12px;font-size:13px;color:#555}
+#lista{padding:8px;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 4px #0002}
+.top{display:flex;justify-content:space-between;align-items:center}
+.cod{font-weight:700;color:#1e3a5f}
+.pos{background:#ffd54f;padding:3px 8px;border-radius:6px;font-weight:700;font-size:13px}
+.desc{margin:6px 0;font-weight:600}
+.det{font-size:13px;color:#555;line-height:1.5}
+.est{font-size:14px;margin-top:4px}.est b{color:#1e9e5a}
+.fotos{display:flex;gap:6px;overflow-x:auto;margin:8px 0}
+.fotos img{width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0}
+.acoes{display:flex;gap:6px}.acoes button{flex:1}
+.modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:20;padding:10px}
+.modal.on{display:flex}
+.box{background:#fff;border-radius:12px;padding:16px;width:100%;max-width:500px;max-height:90vh;overflow:auto}
+.box h2{font-size:17px;margin-bottom:10px}
+.box label{font-size:12px;color:#555;display:block;margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#viewer img{max-width:100%;max-height:75vh;border-radius:8px}
+#viewer .box{text-align:center}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 Almoxarifado SARTOMAQ</h1>
+  <div class="bar">
+    <input id="busca" placeholder="🔍 Buscar código, descrição, posição...">
+    <button onclick="abrirForm()">＋ Item</button>
+    <button class="sec" onclick="$('#menu').classList.add('on')">☰</button>
+  </div>
+</header>
+<div class="info" id="info"></div>
+<div id="lista"></div>
+
+<!-- Input de câmera (compartilhado) -->
+<input type="file" id="camera" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="fileCSV" accept=".csv" class="hidden">
+<input type="file" id="fileJSON" accept=".json" class="hidden">
+
+<!-- Menu -->
+<div class="modal" id="menu"><div class="box">
+  <h2>Menu</h2>
+  <div style="display:grid;gap:8px">
+    <button onclick="$('#fileCSV').click()">📥 Importar planilha (CSV)</button>
+    <button class="ok" onclick="exportarBackup()">💾 Exportar backup (itens + fotos)</button>
+    <button class="sec" onclick="$('#fileJSON').click()">📂 Restaurar backup</button>
+    <button class="del" onclick="limparTudo()">🗑 Apagar todos os dados</button>
+    <button class="sec" onclick="fechar('menu')">Fechar</button>
+  </div>
+  <p class="info">Dica: no Excel, salve a aba como <b>CSV (separado por ponto e vírgula)</b> e importe aqui.</p>
+</div></div>
+
+<!-- Formulário -->
+<div class="modal" id="form"><div class="box">
+  <h2 id="formTit">Item</h2>
+  <label>Cód. Interno *</label><input id="f_codigo">
+  <label>Descrição</label><textarea id="f_descricao" rows="2"></textarea>
+  <div class="grid2">
+    <div><label>Coluna</label><input id="f_coluna"></div>
+    <div><label>Prateleira</label><input id="f_prateleira"></div>
+    <div><label>Tipo de Caixa</label><input id="f_caixa"></div>
+    <div><label>Unidade</label><input id="f_unidade"></div>
+    <div><label>Cód. Fornecedor</label><input id="f_codForn"></div>
+    <div><label>Fornecedor</label><input id="f_fornecedor"></div>
+    <div><label>Estoque Mín.</label><input id="f_min" type="number"></div>
+    <div><label>Estoque Atual</label><input id="f_atual" type="number"></div>
+  </div>
+  <label>Dimensional</label><input id="f_dimensional">
+  <label>Aplicação (equipamentos)</label><input id="f_aplicacao">
+  <div class="acoes" style="margin-top:12px">
+    <button class="ok" onclick="salvarForm()">Salvar</button>
+    <button class="del hidden" id="btnExcluir" onclick="excluirItem()">Excluir</button>
+    <button class="sec" onclick="fechar('form')">Cancelar</button>
+  </div>
+</div></div>
+
+<!-- Visualizador de foto -->
+<div class="modal" id="viewer"><div class="box">
+  <img id="vImg">
+  <p class="info" id="vData"></p>
+  <div class="acoes">
+    <button class="del" onclick="excluirFoto()">Excluir foto</button>
+    <button class="sec" onclick="fechar('viewer')">Fechar</button>
+  </div>
+</div></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const CAMPOS = ['codigo','descricao','coluna','prateleira','caixa','unidade','codForn','fornecedor','min','atual','dimensional','aplicacao'];
+
+// Itens iniciais (amostra da planilha)
+const INICIAIS = [
+ {codigo:'S00001',descricao:'ESTEIRA PORTA CABOS (APÓS Nº SÉRIE 0150732)',coluna:'A',prateleira:'0.1',caixa:'7',codForn:'0432527',fornecedor:'Paletrans',unidade:'Peça',atual:1},
+ {codigo:'S00051',descricao:'TRAVA DA BATERIA',coluna:'B',prateleira:'0.1',caixa:'7',codForn:'0432279',fornecedor:'Paletrans',unidade:'Peça',atual:2},
+ {codigo:'S00101',descricao:'CAPA DE PROTEÇÃO',coluna:'C',prateleira:'0.1',caixa:'7',codForn:'6014107',fornecedor:'TOTAL SOURCE',unidade:'Peça',atual:1},
+ {codigo:'S00002',descricao:'ALAVANCA DE ACIONAMENTO ALONGADA',dimensional:'Comprimento 350mm',coluna:'A',prateleira:'0.2',caixa:'7',codForn:'0426222',fornecedor:'Paletrans',unidade:'Peça',atual:1},
+ {codigo:'S00052',descricao:'CARCAÇA SUPERIOR',coluna:'B',prateleira:'0.2',caixa:'7',codForn:'0426410',fornecedor:'Paletrans',unidade:'Peça',atual:1},
+ {codigo:'S00053',descricao:'SENSOR INDUTIVO (NPN 1NA/1NF BIFL 5-18L-11N)',dimensional:'M8X5mm',coluna:'B',prateleira:'0.3',caixa:'7',codForn:'102179',fornecedor:'BLUE SENSOR',unidade:'Peça',atual:6},
+ {codigo:'S00055',descricao:'CHAVE DE IGNIÇÃO',coluna:'B',prateleira:'1.1',caixa:'5',codForn:'IR0002318765',fornecedor:'STILL',unidade:'Peça',atual:1},
+ {codigo:'S00229',descricao:'ACELERADOR COMPLETO',coluna:'E',prateleira:'1.1',caixa:'5',codForn:'0426412',fornecedor:'Paletrans',unidade:'Peça',atual:1},
+ {codigo:'S00230',descricao:'REGULADOR DE POTÊNCIA',coluna:'E',prateleira:'1.2',caixa:'5',codForn:'404099',fornecedor:'Paletrans',unidade:'Peça',atual:1},
+ {codigo:'S00117',descricao:'ANEL O´RING',dimensional:'Diâmetro externo 38mm',coluna:'C',prateleira:'2.4',caixa:'5',codForn:'0401034',fornecedor:'Paletrans',unidade:'Peça',atual:40},
+ {codigo:'S00141',descricao:'PARAFUSO ALLEN CABEÇA CILÍNDRICA (RODA DE TRAÇÃO)',dimensional:'M8X35mm',coluna:'C',prateleira:'5.6',caixa:'L230 A130',codForn:'0426233',fornecedor:'Paletrans',unidade:'Peça',atual:30},
+ {codigo:'S00282',descricao:'FILTRO DE COMBUSTÍVEL',coluna:'E',prateleira:'9.6',caixa:'5',fornecedor:'DELPHI',unidade:'Peça',atual:3}
+];
+
+/* ========== IndexedDB ========== */
+let db;
+function abrirDB(){
+  return new Promise((ok,erro)=>{
+    const r = indexedDB.open('almoxarifado',1);
+    r.onupgradeneeded = e=>{
+      const d = e.target.result;
+      d.createObjectStore('itens',{keyPath:'codigo'});
+      d.createObjectStore('fotos',{keyPath:'id',autoIncrement:true}).createIndex('item','item');
+    };
+    r.onsuccess = ()=>{db=r.result;ok()};
+    r.onerror = erro;
+  });
+}
+function tx(store,modo='readonly'){return db.transaction(store,modo).objectStore(store)}
+function req(r){return new Promise((ok,erro)=>{r.onsuccess=()=>ok(r.result);r.onerror=erro})}
+const getAll = s => req(tx(s).getAll());
+const put = (s,v) => req(tx(s,'readwrite').put(v));
+const del = (s,k) => req(tx(s,'readwrite').delete(k));
+const fotosDo = cod => req(tx('fotos').index('item').getAll(cod));
+
+/* ========== Render ========== */
+let itens=[], fotos={}, itemFoto=null, fotoAtual=null;
+
+async function carregar(){
+  itens = (await getAll('itens')).sort((a,b)=>a.codigo.localeCompare(b.codigo));
+  fotos = {};
+  (await getAll('fotos')).forEach(f=>(fotos[f.item] ??= []).push(f));
+  render();
+}
+
+function esc(t){return String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function render(){
+  const q = $('#busca').value.toLowerCase().trim();
+  const filtrados = itens.filter(i=>!q || CAMPOS.some(c=>String(i[c]??'').toLowerCase().includes(q)) || `${i.coluna} ${i.prateleira}`.toLowerCase().includes(q));
+  const totalFotos = Object.values(fotos).reduce((s,a)=>s+a.length,0);
+  $('#info').textContent = `${filtrados.length} de ${itens.length} itens • ${totalFotos} fotos`;
+  $('#lista').innerHTML = filtrados.map(i=>{
+    const fs = fotos[i.codigo]||[];
+    const baixo = i.min && Number(i.atual) <= Number(i.min);
+    return `<div class="card">
+      <div class="top"><span class="cod">${esc(i.codigo)}</span>
+        <span class="pos">📍 ${esc(i.coluna||'-')} / ${esc(i.prateleira||'-')}</span></div>
+      <div class="desc">${esc(i.descricao)||'<i>Sem descrição</i>'}</div>
+      <div class="det">
+        ${i.dimensional?`📏 ${esc(i.dimensional)}<br>`:''}
+        ${i.fornecedor?`🏭 ${esc(i.fornecedor)} ${i.codForn?'• '+esc(i.codForn):''}<br>`:''}
+        ${i.caixa?`📦 Caixa: ${esc(i.caixa)}`:''} ${i.aplicacao?`<br>🔧 ${esc(i.aplicacao)}`:''}
+      </div>
+      <div class="est">Estoque: <b style="${baixo?'color:#d33':''}">${esc(i.atual??0)}</b> ${esc(i.unidade||'')}${baixo?' ⚠️':''}</div>
+      <div class="fotos">${fs.map(f=>`<img src="${f.img}" onclick="verFoto(${f.id})">`).join('')}</div>
+      <div class="acoes">
+        <button class="ok" onclick="tirarFoto('${esc(i.codigo)}')">📷 Foto (${fs.length})</button>
+        <button class="sec" onclick="abrirForm('${esc(i.codigo)}')">✏️ Editar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ========== Câmera / Fotos ========== */
+function tirarFoto(cod){ itemFoto = cod; $('#camera').value=''; $('#camera').click(); }
+
+$('#camera').onchange = async e=>{
+  for(const file of e.target.files){
+    const img = await comprimir(file, 1280, 0.75);
+    await put('fotos',{item:itemFoto,img,data:new Date().toLocaleString('pt-BR')});
+  }
+  carregar();
+};
+
+function comprimir(file,max,qual){
+  return new Promise(ok=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const k = Math.min(1, max/Math.max(img.width,img.height));
+      const c = document.createElement('canvas');
+      c.width = img.width*k; c.height = img.height*k;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL('image/jpeg',qual));
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function verFoto(id){
+  fotoAtual = Object.values(fotos).flat().find(f=>f.id===id);
+  $('#vImg').src = fotoAtual.img;
+  $('#vData').textContent = `${fotoAtual.item} • ${fotoAtual.data}`;
+  $('#viewer').classList.add('on');
+}
+async function excluirFoto(){
+  if(!confirm('Excluir esta foto?')) return;
+  await del('fotos',fotoAtual.id); fechar('viewer'); carregar();
+}
+
+/* ========== Formulário ========== */
+let editando=null;
+function abrirForm(cod){
+  editando = cod||null;
+  const i = itens.find(x=>x.codigo===cod)||{};
+  CAMPOS.forEach(c=>$('#f_'+c).value = i[c]??'');
+  $('#f_codigo').disabled = !!cod;
+  $('#formTit').textContent = cod?'Editar item':'Novo item';
+  $('#btnExcluir').classList.toggle('hidden',!cod);
+  $('#form').classList.add('on');
+}
+async function salvarForm(){
+  const o={}; CAMPOS.forEach(c=>o[c]=$('#f_'+c).value.trim());
+  o.codigo = o.codigo.toUpperCase();
+  if(!o.codigo) return alert('Informe o código.');
+  if(!editando && itens.some(i=>i.codigo===o.codigo)) return alert('Código já existe.');
+  await put('itens',o); fechar('form'); carregar();
+}
+async function excluirItem(){
+  if(!confirm('Excluir item e suas fotos?')) return;
+  for(const f of await fotosDo(editando)) await del('fotos',f.id);
+  await del('itens',editando); fechar('form'); carregar();
+}
+function fechar(id){$('#'+id).classList.remove('on')}
+
+/* ========== Importar CSV da planilha ========== */
+function parseCSV(txt){
+  const sep = (txt.split('\n')[0].match(/;/g)||[]).length >= (txt.split('\n')[0].match(/,/g)||[]).length ? ';' : ',';
+  const rows=[]; let row=[], cel='', q=false;
+  for(let i=0;i<txt.length;i++){
+    const ch=txt[i];
+    if(q){ if(ch=='"'){ if(txt[i+1]=='"'){cel+='"';i++} else q=false } else cel+=ch }
+    else if(ch=='"') q=true;
+    else if(ch==sep){row.push(cel);cel=''}
+    else if(ch=='\n'){row.push(cel);rows.push(row);row=[];cel=''}
+    else if(ch!='\r') cel+=ch;
+  }
+  row.push(cel); rows.push(row);
+  return rows;
+}
+
+$('#fileCSV').onchange = async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  let txt = await f.text();
+  if(txt.includes('�')) txt = new TextDecoder('windows-1252').decode(await f.arrayBuffer());
+  const rows = parseCSV(txt);
+  const h = rows.findIndex(r=>r[0]?.trim().startsWith('Cód. Interno'));
+  const equip = h>=0 ? rows[h] : [];
+  let n=0;
+  for(const r of rows.slice(h+1)){
+    const cod = r[0]?.trim();
+    if(!/^S\d+/i.test(cod||'')) continue;
+    // Aplicação: colunas com "OK" (equipamentos a partir da coluna 22)
+    const apl = [];
+    for(let c=22;c<equip.length;c++) if(r[c]?.trim().toUpperCase()=='OK' && equip[c]) apl.push(equip[c].trim());
+    await put('itens',{
+      codigo:cod.toUpperCase(), caixa:r[2]?.replace(/\s+/g,' ').trim(),
+      coluna:(r[5]||r[3])?.trim(), prateleira:(r[6]||r[4])?.trim(),
+      descricao:r[7]?.replace(/\s+/g,' ').trim(), dimensional:r[8]?.replace(/\s+/g,' ').trim(),
+      codForn:r[9]?.replace(/\s+/g,' ').trim(), fornecedor:(r[10]||r[11])?.trim(),
+      unidade:r[13]?.trim(), min:r[14]?.trim(), atual:r[16]?.trim(),
+      aplicacao:apl.join(', ')
+    }); n++;
+  }
+  fechar('menu'); carregar(); alert(`${n} itens importados/atualizados. As fotos foram mantidas.`);
+};
+
+/* ========== Backup ========== */
+async function exportarBackup(){
+  const dados = {versao:1,data:new Date().toISOString(),itens:await getAll('itens'),fotos:await getAll('fotos')};
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(dados)],{type:'application/json'}));
+  a.download = `backup-almoxarifado-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+$('#fileJSON').onchange = async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!confirm(`Restaurar ${d.itens.length} itens e ${d.fotos.length} fotos? Os dados atuais serão substituídos.`)) return;
+    await req(tx('itens','readwrite').clear()); await req(tx('fotos','readwrite').clear());
+    for(const i of d.itens) await put('itens',i);
+    for(const ft of d.fotos) await put('fotos',ft);
+    fechar('menu'); carregar(); alert('Backup restaurado!');
+  }catch{ alert('Arquivo de backup inválido.') }
+};
+async function limparTudo(){
+  if(!confirm('Apagar TODOS os itens e fotos? Faça um backup antes!')) return;
+  await req(tx('itens','readwrite').clear()); await req(tx('fotos','readwrite').clear());
+  fechar('menu'); carregar();
+}
+
+/* ========== Início ========== */
+$('#busca').oninput = render;
+document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
+
+(async()=>{
+  await abrirDB();
+  if(!(await getAll('itens')).length) for(const i of INICIAIS) await put('itens',i);
+  if(navigator.storage?.persist) navigator.storage.persist();
+  carregar();
+})();
+</script>
+</body>
+</html>
